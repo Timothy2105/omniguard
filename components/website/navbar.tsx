@@ -13,6 +13,9 @@ export default function Navbar() {
           <Link legacyBehavior href="/testAPI">
             <a className="text-lg text-black-800 hover:text-white hover:underline">TestAPI</a>
           </Link>
+          <Link legacyBehavior href="/mainOptionsPage">
+            <a className="text-lg text-black-800 hover:text-white hover:underline">Main Options Page</a>
+          </Link>
         </div>
       </div>
     </nav>
