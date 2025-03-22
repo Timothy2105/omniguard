@@ -2,7 +2,12 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+if (!GOOGLE_API_KEY) {
+  throw new Error('GOOGLE_API_KEY is not set');
+}
+
+const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
 
 export async function generateGeminiResponse(formData: FormData) {
   try {
