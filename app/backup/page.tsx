@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState } from 'react';
-import { generateGeminiResponse } from '@/backup/gemini';
+import { generateGeminiResponse } from '@/app/backup/gemini';
 
 export default function TestAPI() {
   const [prompt, setPrompt] = useState('');
