@@ -1,29 +1,60 @@
-import Image from "next/image";
+'use client';
+
+import Image from 'next/image';
+import { useState } from 'react';
+import { generateGeminiResponse } from './utils/gemini';
 
 export default function Home() {
+  const [prompt, setPrompt] = useState('');
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!prompt.trim()) return;
+
+    setLoading(false);
+    try {
+      const result = await generateGeminiResponse(prompt);
+      setResponse(result);
+    } catch (error) {
+      console.error('Error:', error);
+      setResponse('An error occurred while generating the response.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+      <main className="flex flex-col gap-[32px] row-start-2 items-center w-full max-w-2xl">
+        <Image className="dark:invert" src="/next.svg" alt="Next.js logo" width={180} height={38} priority />
+
+        <div className="w-full space-y-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Enter your prompt here..."
+              className="w-full p-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] bg-white dark:bg-gray-800"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 disabled:opacity-50"
+            >
+              {loading ? 'Generating...' : 'Generate Response'}
+            </button>
+          </form>
+
+          {response && (
+            <div className="mt-6 p-4 border rounded-lg bg-white/5">
+              <h2 className="text-lg font-semibold mb-2">Response:</h2>
+              <p className="whitespace-pre-wrap">{response}</p>
+            </div>
+          )}
+        </div>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <a
@@ -32,13 +63,7 @@ export default function Home() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
+            <Image className="dark:invert" src="/vercel.svg" alt="Vercel logomark" width={20} height={20} />
             Deploy now
           </a>
           <a
@@ -58,13 +83,7 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
+          <Image aria-hidden src="/file.svg" alt="File icon" width={16} height={16} />
           Learn
         </a>
         <a
@@ -73,13 +92,7 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
+          <Image aria-hidden src="/window.svg" alt="Window icon" width={16} height={16} />
           Examples
         </a>
         <a
@@ -88,13 +101,7 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
+          <Image aria-hidden src="/globe.svg" alt="Globe icon" width={16} height={16} />
           Go to nextjs.org →
         </a>
       </footer>
