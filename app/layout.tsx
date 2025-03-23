@@ -6,6 +6,7 @@ import { hasEnvVars } from '@/utils/supabase/check-env-vars';
 import { Geist } from 'next/font/google';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import Link from 'next/link';
+import DynamicHomeLink from '@/components/website/dynamic-home-link';
 import './globals.css';
 
 const defaultUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
@@ -35,7 +36,7 @@ export default function RootLayout({
               <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
                 <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
                   <div className="flex items-center font-semibold">
-                    <Link href={'/'}>Home Page</Link>
+                    <DynamicHomeLink />
                   </div>
                   <HeaderAuth />
                 </div>
