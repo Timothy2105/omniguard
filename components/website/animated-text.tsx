@@ -5,12 +5,19 @@ import { useState, useEffect } from 'react';
 const phrases = ['Prevent dangerous activity', 'Real-time analytics', 'Receive instant alerts'];
 
 export default function AnimatedText() {
+  const [mounted, setMounted] = useState(false);
   const [text, setText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [loopNum, setLoopNum] = useState(0);
   const [typingSpeed, setTypingSpeed] = useState(120);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const handleTyping = () => {
       const i = loopNum % phrases.length;
       const fullText = phrases[i];
@@ -29,7 +36,11 @@ export default function AnimatedText() {
 
     const timer = setTimeout(handleTyping, typingSpeed);
     return () => clearTimeout(timer);
-  }, [text, isDeleting, loopNum, typingSpeed]);
+  }, [text, isDeleting, loopNum, typingSpeed, mounted]);
+
+  if (!mounted) {
+    return <div className="h-16 flex items-center justify-center" />;
+  }
 
   return (
     <div className="h-16 flex items-center justify-center">
