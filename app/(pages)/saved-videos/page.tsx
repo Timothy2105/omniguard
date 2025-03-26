@@ -41,7 +41,7 @@ export default function SavedVideosPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] bg-black text-white p-4">
+    <div className="min-h-[calc(100vh-8rem)] bg-black text-white p-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-extrabold mb-8 text-center text-white tracking-tight drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]">
           Saved Videos

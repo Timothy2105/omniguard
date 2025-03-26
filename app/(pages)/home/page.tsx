@@ -3,7 +3,7 @@ import { Video, PlaySquare, FolderOpen } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="h-[calc(100vh-8rem)] bg-black flex items-center justify-center p-4">
+    <div className="min-h-[calc(100vh-8rem)] bg-black flex items-center justify-center p-4">
       <div className="relative w-full max-w-md">
         <div className="relative bg-zinc-900 rounded-2xl p-8 shadow-xl">
           <h1 className="text-4xl font-extrabold text-center mb-8 text-white tracking-tight drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]">

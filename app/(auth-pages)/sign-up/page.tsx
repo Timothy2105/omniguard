@@ -17,7 +17,7 @@ export default async function Signup(props: { searchParams: Promise<Message> }) 
   }
 
   return (
-    <div className="flex justify-center items-center h-[calc(100vh-8rem)] w-full bg-background">
+    <div className="flex justify-center items-center min-h-[calc(100vh-8rem)] w-full bg-background">
       <div className="w-full max-w-md px-4">
         <form className="flex flex-col w-full p-8 space-y-6 bg-card rounded-lg shadow-lg">
           <div className="space-y-2 text-center">

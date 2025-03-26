@@ -154,7 +154,7 @@ export default function Page() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
+    <div className="min-h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
       <div className="w-full max-w-4xl relative">
         <div className="absolute inset-0 bg-purple-900/5 blur-3xl rounded-full"></div>
 
