@@ -8,7 +8,7 @@ import { ProgressBar } from '@/components/website/progress-bar';
 import VideoPlayer from '@/components/website/video-player';
 import TimestampList from '@/components/website/timestamp-list';
 import type { Timestamp } from '@/app/types';
-import { detectEvents } from './actions';
+import { detectEvents, type VideoEvent } from './actions';
 
 export default function Page() {
   const [videoUrl, setVideoUrl] = useState<string>('');
@@ -118,7 +118,7 @@ export default function Page() {
             const result = await detectEvents(frame);
             console.log('Frame analysis result:', result);
             if (result.events && result.events.length > 0) {
-              result.events.forEach((event) => {
+              result.events.forEach((event: VideoEvent) => {
                 const minutes = Math.floor(time / 60);
                 const seconds = Math.floor(time % 60);
                 newTimestamps.push({
