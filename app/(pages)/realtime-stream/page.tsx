@@ -200,7 +200,7 @@ export default function Page() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+    <div className="min-h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
       <div className="w-full max-w-4xl relative">
         <div className="absolute inset-0 bg-purple-900/5 blur-3xl rounded-full"></div>
 
@@ -208,7 +208,7 @@ export default function Page() {
           <div className="space-y-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]">
-                Real-time Video Analyzer
+                Real-Time Video Analyzer
               </h1>
               <p className="text-zinc-400">Analyze your webcam feed in real-time and detect key moments</p>
             </div>
@@ -221,7 +221,7 @@ export default function Page() {
                   playsInline
                   muted
                   className="w-full h-full object-cover transform scale-x-[-1]"
-                />{' '}
+                />
               </div>
 
               {error && <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>}
@@ -246,44 +246,48 @@ export default function Page() {
                 )}
               </div>
 
-              {isRecording && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-sm text-zinc-400">Recording and analyzing...</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-4 space-y-2">
-                <h2 className="text-xl font-semibold text-white">Detected Events</h2>
-                {timestamps.length > 0 ? (
-                  <TimestampList timestamps={timestamps} onTimestampClick={() => {}} showHeading={false} />
-                ) : (
-                  <p className="text-zinc-400 text-sm">
-                    {isRecording ? 'Waiting for events...' : 'Start analysis to detect events'}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-8 space-y-2">
-                <h2 className="text-xl font-semibold text-white">Audio Transcript</h2>
-                <div className="p-4 bg-zinc-900/50 rounded-lg">
-                  {isTranscribing && (
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-sm text-zinc-400">Transcribing audio...</span>
+              {(isRecording || timestamps.length > 0 || transcript) && (
+                <>
+                  {isRecording && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-sm text-zinc-400">Recording and analyzing...</span>
+                      </div>
                     </div>
                   )}
-                  {transcript ? (
-                    <p className="text-zinc-300 whitespace-pre-wrap">{transcript}</p>
-                  ) : (
-                    <p className="text-zinc-500 italic">
-                      {isRecording ? 'Waiting for speech...' : 'Start recording to capture audio'}
-                    </p>
-                  )}
-                </div>
-              </div>
+
+                  <div className="mt-4 space-y-2">
+                    <h2 className="text-xl font-semibold text-white">Detected Events</h2>
+                    {timestamps.length > 0 ? (
+                      <TimestampList timestamps={timestamps} onTimestampClick={() => {}} showHeading={false} />
+                    ) : (
+                      <p className="text-zinc-400 text-sm">
+                        {isRecording ? 'Waiting for events...' : 'Start analysis to detect events'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-8 space-y-2">
+                    <h2 className="text-xl font-semibold text-white">Audio Transcript</h2>
+                    <div className="p-4 bg-zinc-900/50 rounded-lg">
+                      {isTranscribing && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                          <span className="text-sm text-zinc-400">Transcribing audio...</span>
+                        </div>
+                      )}
+                      {transcript ? (
+                        <p className="text-zinc-300 whitespace-pre-wrap">{transcript}</p>
+                      ) : (
+                        <p className="text-zinc-500 italic">
+                          {isRecording ? 'Waiting for speech...' : 'Start recording to capture audio'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
