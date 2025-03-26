@@ -68,16 +68,13 @@ DO NOT include any text outside the JSON.`;
       const text = response.text();
       console.log('Raw API Response:', text);
 
-      // Try to extract JSON from the response, handling potential code blocks
       let jsonStr = text;
 
-      // First try to extract content from code blocks if present
       const codeBlockMatch = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
       if (codeBlockMatch) {
         jsonStr = codeBlockMatch[1];
         console.log('Extracted JSON from code block:', jsonStr);
       } else {
-        // If no code block, try to find raw JSON
         const jsonMatch = text.match(/\{[^]*\}/);
         if (jsonMatch) {
           jsonStr = jsonMatch[0];
