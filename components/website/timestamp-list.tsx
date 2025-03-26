@@ -7,12 +7,13 @@ import type { Timestamp } from '@/app/types';
 interface TimestampListProps {
   timestamps: Timestamp[];
   onTimestampClick: (timestamp: string) => void;
+  showHeading?: boolean;
 }
 
-export default function TimestampList({ timestamps, onTimestampClick }: TimestampListProps) {
+export default function TimestampList({ timestamps, onTimestampClick, showHeading = true }: TimestampListProps) {
   return (
     <div className="grid gap-2">
-      <h2 className="text-xl font-semibold mb-2 text-white">Key Moments</h2>
+      {showHeading && <h2 className="text-xl font-semibold mb-2 text-white">Key Moments</h2>}
       <div className="grid gap-2">
         {timestamps.map((item, index) => (
           <Button

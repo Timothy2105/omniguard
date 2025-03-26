@@ -258,7 +258,7 @@ export default function Page() {
               <div className="mt-4 space-y-2">
                 <h2 className="text-xl font-semibold text-white">Detected Events</h2>
                 {timestamps.length > 0 ? (
-                  <TimestampList timestamps={timestamps} onTimestampClick={() => {}} />
+                  <TimestampList timestamps={timestamps} onTimestampClick={() => {}} showHeading={false} />
                 ) : (
                   <p className="text-zinc-400 text-sm">
                     {isRecording ? 'Waiting for events...' : 'Start analysis to detect events'}
