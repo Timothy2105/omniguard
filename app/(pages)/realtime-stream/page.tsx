@@ -15,6 +15,7 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const startTimeRef = useRef<Date | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
