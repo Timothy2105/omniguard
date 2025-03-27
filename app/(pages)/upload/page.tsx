@@ -124,6 +124,7 @@ export default function Page() {
                 newTimestamps.push({
                   timestamp: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
                   description: event.description,
+                  isDangerous: event.isDangerous,
                 });
               });
             }
