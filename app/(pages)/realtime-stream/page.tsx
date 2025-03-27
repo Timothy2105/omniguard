@@ -108,7 +108,9 @@ export default function Page() {
   const analyzeFrame = async () => {
     const currentTranscript = transcript.trim();
     console.log('Analyzing frame...');
-    if (!isRecordingRef.current) {
+
+    const wasRecording = isRecordingRef.current;
+    if (!wasRecording) {
       console.log('Not recording, skipping analysis');
       return;
     }
@@ -119,6 +121,11 @@ export default function Page() {
         console.log('Frame captured, sending to API...');
         const result = await detectEvents(frame, currentTranscript);
         console.log('API response:', result);
+
+        if (!isRecordingRef.current) {
+          console.log('Recording stopped during analysis, discarding results');
+          return;
+        }
 
         if (result.events && result.events.length > 0) {
           console.log('Events detected:', result.events);
@@ -144,7 +151,9 @@ export default function Page() {
     } catch (error) {
       console.error('Error analyzing frame:', error);
       setError('Error analyzing frame. Please try again.');
-      stopRecording();
+      if (isRecordingRef.current) {
+        stopRecording();
+      }
     }
   };
 
@@ -218,9 +227,9 @@ export default function Page() {
           <div className="space-y-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]">
-                Real-Time Video Analyzer
+                Real-Time Stream Analyzer
               </h1>
-              <p className="text-zinc-400">Analyze your webcam feed in real-time and detect key moments</p>
+              <p className="text-zinc-400">Analyze your live stream in real-time and detect key moments</p>
             </div>
 
             <div className="space-y-4">
