@@ -2,10 +2,20 @@
 
 import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Camera, StopCircle, PlayCircle } from 'lucide-react';
+import { Camera, StopCircle, PlayCircle, Save } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import TimestampList from '@/components/website/timestamp-list';
 import type { Timestamp } from '@/app/types';
 import { detectEvents, type VideoEvent } from './actions';
+
+interface SavedVideo {
+  id: string;
+  name: string;
+  url: string;
+  thumbnailUrl: string;
+  timestamps: Timestamp[];
+}
 
 export default function Page() {
   const [isRecording, setIsRecording] = useState(false);
@@ -15,6 +25,9 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [videoName, setVideoName] = useState('');
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const startTimeRef = useRef<Date | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -23,8 +36,17 @@ export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isRecordingRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const initSpeechRecognition = () => {
+    // only run on client side
+    if (typeof window === 'undefined') return;
+
     if ('webkitSpeechRecognition' in window) {
       const SpeechRecognition = window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
@@ -45,8 +67,8 @@ export default function Page() {
 
       // no-speech errors
       // recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      //   console.error('Speech recognition error:', event.error);
-      //   setError('Speech recognition error: ' + event.error);
+      //   console.error('Speech recognition error:', error);
+      //   setError('Speech recognition error: ' + error);
       // };
 
       recognitionRef.current = recognition;
@@ -56,6 +78,8 @@ export default function Page() {
   };
 
   const startWebcam = async () => {
+    if (typeof window === 'undefined') return;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       if (videoRef.current) {
@@ -75,6 +99,10 @@ export default function Page() {
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+    }
+    if (recordedVideoUrl) {
+      URL.revokeObjectURL(recordedVideoUrl);
+      setRecordedVideoUrl(null);
     }
   };
 
@@ -158,6 +186,8 @@ export default function Page() {
   };
 
   const startRecording = () => {
+    if (typeof window === 'undefined' || !mediaStreamRef.current) return;
+
     startTimeRef.current = new Date();
 
     if (recognitionRef.current) {
@@ -165,7 +195,30 @@ export default function Page() {
       setIsTranscribing(true);
       recognitionRef.current.start();
     }
+
+    recordedChunksRef.current = [];
+    const mediaRecorder = new MediaRecorder(mediaStreamRef.current, {
+      mimeType: 'video/webm',
+    });
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      setRecordedVideoUrl(url);
+      setVideoName('stream.mp4');
+    };
+
+    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorder.start();
+
     console.log('Starting recording...');
+
     if (analysisIntervalRef.current) {
       clearInterval(analysisIntervalRef.current);
     }
@@ -173,6 +226,7 @@ export default function Page() {
     setTimestamps([]);
     setError(null);
     setAnalysisProgress(0);
+    setRecordedVideoUrl(null);
 
     isRecordingRef.current = true;
     setIsRecording(true);
@@ -190,6 +244,11 @@ export default function Page() {
       recognitionRef.current.stop();
       setIsTranscribing(false);
     }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+
     console.log('Stopping recording...');
     isRecordingRef.current = false;
     setIsRecording(false);
@@ -202,21 +261,52 @@ export default function Page() {
   };
 
   useEffect(() => {
-    initSpeechRecognition();
-    const initWebcam = async () => {
+    if (typeof window === 'undefined') return;
+
+    let mounted = true;
+
+    const init = async () => {
+      if (!mounted) return;
+
+      initSpeechRecognition();
+
       await startWebcam();
-      canvasRef.current = document.createElement('canvas');
+      if (mounted) {
+        canvasRef.current = document.createElement('canvas');
+      }
     };
 
-    initWebcam();
+    init();
 
     return () => {
+      mounted = false;
       stopWebcam();
       if (analysisIntervalRef.current) {
         clearInterval(analysisIntervalRef.current);
       }
     };
   }, []);
+
+  const handleSaveVideo = () => {
+    if (typeof window === 'undefined' || !recordedVideoUrl || !videoName) return;
+
+    try {
+      const savedVideos: SavedVideo[] = JSON.parse(localStorage.getItem('savedVideos') || '[]');
+      const newVideo: SavedVideo = {
+        id: Date.now().toString(),
+        name: videoName,
+        url: recordedVideoUrl,
+        thumbnailUrl: recordedVideoUrl,
+        timestamps: timestamps,
+      };
+      savedVideos.push(newVideo);
+      localStorage.setItem('savedVideos', JSON.stringify(savedVideos));
+      alert('Video saved successfully!');
+    } catch (error) {
+      console.error('Error saving video:', error);
+      alert('Failed to save video. Please try again.');
+    }
+  };
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
@@ -234,16 +324,20 @@ export default function Page() {
 
             <div className="space-y-4">
               <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover transform scale-x-[-1]"
-                />
+                {isClient && (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform scale-x-[-1]"
+                  />
+                )}
               </div>
 
-              {error && <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>}
+              {isClient && error && (
+                <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>
+              )}
 
               <div className="flex justify-center gap-4">
                 {!isRecording ? (
@@ -265,7 +359,30 @@ export default function Page() {
                 )}
               </div>
 
-              {isRecording && (
+              {isClient && !isRecording && recordedVideoUrl && (
+                <div className="mt-8 p-6 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                  <h2 className="text-xl font-semibold mb-4 text-white">Save Recording</h2>
+                  <div className="flex gap-4">
+                    <Input
+                      type="text"
+                      placeholder="Enter video name"
+                      value={videoName}
+                      onChange={(e) => setVideoName(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                    <Button
+                      onClick={handleSaveVideo}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                      disabled={!videoName}
+                    >
+                      <Save className="w-4 h-4" />
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {isClient && isRecording && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
