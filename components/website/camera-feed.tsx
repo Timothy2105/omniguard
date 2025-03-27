@@ -19,7 +19,6 @@ export function CameraFeed({ camera, date = new Date(), onTimeUpdate }: CameraFe
 
   return (
     <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl bg-black">
-      {/* Camera Feed */}
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
@@ -48,26 +47,18 @@ export function CameraFeed({ camera, date = new Date(), onTimeUpdate }: CameraFe
         <source src={camera.videoUrl || camera.thumbnail} type="video/mp4" />
       </video>
 
-      {/* Overlay gradient */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-      {/* Top bar */}
       <div className="absolute left-0 right-0 top-0 flex items-center justify-between p-4">
         <div className="flex items-center gap-2 text-green-400">
           <Wifi className="h-4 w-4" />
           <Battery className="h-4 w-4" />
         </div>
-        {camera.motionLevel && (
-          <div className="flex h-6 items-center rounded-full bg-white/20 px-2 text-sm text-white backdrop-blur-sm">
-            {camera.motionLevel}
-          </div>
-        )}
         <div className="rounded-full bg-white/20 p-1.5 backdrop-blur-sm">
           <MoreHorizontal className="h-4 w-4 text-green-400" />
         </div>
       </div>
 
-      {/* Bottom info */}
       <div className="absolute bottom-0 left-0 right-0 p-4">
         <div className="space-y-1 text-white">
           <div className="text-sm font-medium">{camera.name}</div>
