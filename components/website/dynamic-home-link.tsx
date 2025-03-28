@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function DynamicHomeLink() {
   const router = useRouter();
@@ -21,8 +22,8 @@ export default function DynamicHomeLink() {
   };
 
   return (
-    <Link href="/" onClick={handleClick} className="font-semibold">
-      OmniGuard
+    <Link href="/" onClick={handleClick} className="font-semibold flex items-center">
+      <Image src="/logo.png" alt="OmniGuard Logo" width={200} height={40} className="object-contain" priority />
     </Link>
   );
 }
