@@ -66,6 +66,11 @@ export async function detectEvents(
 - Threatening behavior
 - Weapons visible
 
+5. Suspicious Activities:
+- Shoplifting
+- Vandalism
+- Trespassing
+
 Only report if any of these specific dangerous situations are detected. Ignore normal, non-dangerous activities.
 
 ${
