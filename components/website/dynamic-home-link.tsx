@@ -13,12 +13,16 @@ export default function DynamicHomeLink() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    router.push(user ? '/home' : '/');
+    if (user) {
+      router.push('/home');
+    } else {
+      router.push('/');
+    }
   };
 
   return (
     <Link href="/" onClick={handleClick} className="font-semibold">
-      Home Page
+      OmniGuard
     </Link>
   );
 }
