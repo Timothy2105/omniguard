@@ -1,4 +1,4 @@
-import type { Event, Location } from '@/app/types/index';
+import type { Event, Location, BoundingBoxData } from '@/app/types/index';
 
 export const locations: Location[] = [
   {
@@ -298,3 +298,17 @@ export const initialEvents: Event[] = Array.from({ length: 15 }, (_, i) => ({
   timestamp: new Date(Date.now() - Math.random() * 10 * 60 * 1000), // Random time in last 10 minutes
   description: 'Suspicious activity detected',
 }));
+
+export async function getBoundingBoxData(videoName: string): Promise<BoundingBoxData | null> {
+  try {
+    const response = await fetch(`/bounding_boxes/${videoName}_boxes.json`);
+    if (!response.ok) {
+      console.error(`Failed to load bounding box data for ${videoName}`);
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error loading bounding box data for ${videoName}:`, error);
+    return null;
+  }
+}

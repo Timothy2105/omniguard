@@ -6,7 +6,7 @@ from pathlib import Path
 
 def load_env():
     """Load environment variables from .env.local"""
-    env_path = Path(__file__).parent.parent / '.env.local'
+    env_path = Path(__file__).parent.parent.parent / '.env.local'
     if not env_path.exists():
         raise FileNotFoundError(f"Environment file not found: {env_path}")
         

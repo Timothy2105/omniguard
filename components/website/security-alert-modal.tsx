@@ -15,7 +15,7 @@ export function SecurityAlertModal({ open, onOpenChange, onAlertComplete }: Secu
     if (open && status === 'calling') {
       const timer = setTimeout(() => {
         setStatus('alerted');
-      }, 5000);
+      }, 2500);
       return () => clearTimeout(timer);
     }
   }, [open, status]);
