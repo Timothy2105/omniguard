@@ -71,8 +71,6 @@ export async function detectEvents(
 - Vandalism
 - Trespassing
 
-Only report if any of these specific dangerous situations are detected. Ignore normal, non-dangerous activities.
-
 ${
   transcript
     ? `Consider this audio transcript from the scene: "${transcript}"
@@ -86,15 +84,10 @@ Return a JSON object in this exact format:
         {
             "timestamp": "mm:ss",
             "description": "Brief description of what's happening in this frame",
-            "isDangerous": true/false // Set to true if the event involves a fall, unease, pain, injury, accident, or concerning behavior
+            "isDangerous": true/false // Set to true if the event involves a fall, injury, unease, pain, accident, or concerning behavior
         }
     ]
-}
-
-If none of these dangerous situations are detected, return {"events": []}.
-Be specific about which dangerous situation was detected and describe the exact concerning behavior observed.
-Set isDangerous to true ONLY if one of the listed dangerous situations is detected.
-DO NOT include any text outside the JSON.`;
+}`;
 
     try {
       const result = await model.generateContent([prompt, imagePart]);
