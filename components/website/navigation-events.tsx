@@ -10,14 +10,11 @@ export function NavigationEvents() {
 
   useEffect(() => {
     NProgress.start();
-    NProgress.set(0.4);
+    NProgress.set(1);
 
     const timer = setTimeout(() => {
-      NProgress.set(1);
-      setTimeout(() => {
-        NProgress.remove();
-      }, 10);
-    }, 500);
+      NProgress.remove();
+    }, 10);
 
     return () => {
       clearTimeout(timer);

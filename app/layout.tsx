@@ -16,10 +16,10 @@ import NProgress from 'nprogress';
 
 NProgress.configure({
   showSpinner: false,
-  trickleSpeed: 50,
-  minimum: 0.4,
-  easing: 'linear',
-  speed: 10,
+  trickleSpeed: 1,
+  minimum: 0.99,
+  easing: 'ease',
+  speed: 1,
 });
 
 const defaultUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
