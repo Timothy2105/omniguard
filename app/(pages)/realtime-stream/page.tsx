@@ -218,7 +218,6 @@ export default function Page() {
   const runDetection = async () => {
     if (!isRecordingRef.current) return;
 
-    // Throttle detection to ~10 FPS (every 100ms)
     const now = performance.now();
     if (now - lastDetectionTime.current < 100) {
       detectionFrameRef.current = requestAnimationFrame(runDetection);
@@ -337,8 +336,12 @@ export default function Page() {
     ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
   };
 
+  // -----------------------------
+  // 5) Analyze frame via API (and send email if dangerous)
+  // -----------------------------
   const analyzeFrame = async () => {
     if (!isRecordingRef.current) return;
+
     const currentTranscript = transcript.trim();
     const currentPoseKeypoints = [...lastPoseKeypoints];
 
@@ -391,6 +394,7 @@ export default function Page() {
                 return;
               }
 
+              // Only try to parse JSON for successful responses
               const resData = await response.json();
               console.log('Email notification sent successfully:', resData);
             } catch (error) {
@@ -452,7 +456,6 @@ export default function Page() {
   const startRecording = () => {
     setCurrentTime(0);
     setVideoDuration(0);
-
     if (!mlModelsReady) {
       setError('ML models not ready. Please wait for initialization.');
       return;
@@ -466,7 +469,6 @@ export default function Page() {
     startTimeRef.current = new Date();
     isRecordingRef.current = true;
     setIsRecording(true);
-
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
     }
@@ -599,6 +601,7 @@ export default function Page() {
 
     const handleLoadedMetadata = () => {
       setVideoDuration(video.duration || 60);
+      video.currentTime = 0;
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
@@ -627,11 +630,13 @@ export default function Page() {
     };
   }, []);
 
+  // -----------------------------
+  // Render
+  // -----------------------------
   return (
-    <div className="min-h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="w-full max-w-4xl relative">
         <div className="absolute inset-0 bg-purple-900/5 blur-3xl rounded-full"></div>
-
         <div className="relative z-10 p-8">
           <div className="space-y-8">
             <div className="text-center">
@@ -658,14 +663,14 @@ export default function Page() {
                       muted
                       width={640}
                       height={360}
-                      className="absolute inset-0 w-full h-full object-cover transform"
+                      className="absolute inset-0 w-full h-full object-cover opacity-0"
                     />
                   )}
                   <canvas
                     ref={canvasRef}
                     width={640}
                     height={360}
-                    className="absolute inset-0 w-full h-full object-cover transform"
+                    className="absolute inset-0 w-full h-full object-cover"
                   />
                 </div>
               </div>
@@ -730,7 +735,7 @@ export default function Page() {
                       currentTime={currentTime}
                     />
                   ) : (
-                    <p className="text-zinc-400 text-sm pb-3">
+                    <p className="text-zinc-400 text-sm">
                       {isRecording ? 'Waiting for events...' : 'Start analysis to detect events'}
                     </p>
                   )}
