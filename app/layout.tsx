@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/providers/theme-provider';
 import Link from 'next/link';
 import DynamicHomeLink from '@/components/website/dynamic-home-link';
 import { HeaderNav } from '@/components/website/header-nav';
+import { GeminiFooter } from '@/components/website/gemini-footer';
 import './globals.css';
 
 const defaultUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
@@ -46,19 +47,8 @@ export default function RootLayout({
 
               <div className="w-full">{children}</div>
 
-              <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 pt-2">
-                <p>
-                  Powered by{' '}
-                  <a
-                    href="https://gemini.google.com/app"
-                    target="_blank"
-                    className="font-bold hover:underline"
-                    rel="noreferrer"
-                  >
-                    Gemini
-                  </a>
-                </p>
-                <ThemeSwitcher />
+              <footer className="w-full border-t border-t-foreground/10 p-8 flex justify-center">
+                <GeminiFooter />
               </footer>
             </div>
           </main>
