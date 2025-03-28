@@ -65,6 +65,8 @@ export default function StatisticsPage() {
     document.body.removeChild(link);
   };
   const [keyMoments, setKeyMoments] = useState<KeyMoment[]>([]);
+  const [summary, setSummary] = useState<string>('');
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [chartData, setChartData] = useState<{
     dangerousMomentsByVideo: any;
     dangerTypeDistribution: any;
@@ -87,6 +89,34 @@ export default function StatisticsPage() {
     );
     console.log('Processed Moments:', moments);
     setKeyMoments(moments);
+
+    const fetchSummary = async () => {
+      setIsLoadingSummary(true);
+      try {
+        const response = await fetch('/api/summary', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ keyMoments: moments }),
+        });
+
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setSummary(data.summary);
+      } catch (error) {
+        console.error('Error fetching summary:', error);
+        setSummary('Unable to generate summary at this time.');
+      } finally {
+        setIsLoadingSummary(false);
+      }
+    };
+
+    if (moments.length > 0) {
+      fetchSummary();
+    }
 
     console.log('Saved Videos:', savedVideos);
 
@@ -336,6 +366,19 @@ export default function StatisticsPage() {
 
         <div className="text-sm text-muted-foreground">
           {keyMoments.length} key moments found across all saved videos
+        </div>
+
+        <div className="mt-8 p-6 bg-white/5 rounded-lg backdrop-blur-sm border border-white/10">
+          <h2 className="text-2xl font-semibold mb-4">AI Analysis Summary</h2>
+          {isLoadingSummary ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : summary ? (
+            <div className="prose prose-invert max-w-none">
+              <div className="whitespace-pre-line">{summary}</div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
