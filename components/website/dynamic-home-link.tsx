@@ -15,7 +15,7 @@ export default function DynamicHomeLink() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      router.push('/home');
+      router.push('/dashboard');
     } else {
       router.push('/');
     }
@@ -23,7 +23,7 @@ export default function DynamicHomeLink() {
 
   return (
     <Link href="/" onClick={handleClick} className="font-semibold flex items-center">
-      <Image src="/logo.png" alt="OmniGuard Logo" width={200} height={40} className="object-contain" priority />
+      <Image src="/logo_cropped.png" alt="OmniGuard Logo" width={120} height={50} className="object-contain" priority />
     </Link>
   );
 }
