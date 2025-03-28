@@ -115,25 +115,19 @@ export default function VideoPage() {
             <Button
               onClick={async () => {
                 try {
-                  const response = await fetch(video.url);
-                  const videoBlob = await response.blob();
-
-                  const blob = new Blob([videoBlob], { type: 'video/mp4' });
-                  const blobUrl = URL.createObjectURL(blob);
+                  const downloadUrl = video.url;
 
                   const a = document.createElement('a');
-                  a.href = blobUrl;
+                  a.href = downloadUrl;
                   const downloadName = video.name.toLowerCase().endsWith('.mp4') ? video.name : `${video.name}.mp4`;
                   a.download = downloadName;
                   a.setAttribute('type', 'video/mp4');
                   a.setAttribute('extension', 'mp4');
 
-                  // download
                   document.body.appendChild(a);
                   a.click();
 
                   document.body.removeChild(a);
-                  URL.revokeObjectURL(blobUrl);
                 } catch (error) {
                   console.error('Download error:', error);
                   alert('Failed to download video. Please try again.');
