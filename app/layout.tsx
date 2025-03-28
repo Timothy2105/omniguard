@@ -10,6 +10,17 @@ import DynamicHomeLink from '@/components/website/dynamic-home-link';
 import { HeaderNav } from '@/components/website/header-nav';
 import { GeminiFooter } from '@/components/website/gemini-footer';
 import './globals.css';
+import 'nprogress/nprogress.css';
+import { NavigationEvents } from '@/components/website/navigation-events';
+import NProgress from 'nprogress';
+
+NProgress.configure({
+  showSpinner: false,
+  trickleSpeed: 50,
+  minimum: 0.4,
+  easing: 'linear',
+  speed: 10,
+});
 
 const defaultUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
 
@@ -32,6 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.className} suppressHydrationWarning>
       <body className="bg-background text-foreground" suppressHydrationWarning>
+        <NavigationEvents />
         <ThemeProvider>
           <main className="min-h-screen flex flex-col items-center">
             <div className="flex-1 w-full flex flex-col items-center">
