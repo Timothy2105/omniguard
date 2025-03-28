@@ -9,6 +9,10 @@ import TimestampList from '@/components/website/timestamp-list';
 import type { Timestamp } from '@/app/types';
 import { detectEvents, type VideoEvent } from './actions';
 
+let tf: typeof import('@tensorflow/tfjs');
+let blazeface: typeof import('@tensorflow-models/blazeface');
+let poseDetection: typeof import('@tensorflow-models/pose-detection');
+
 interface SavedVideo {
   id: string;
   name: string;
@@ -19,7 +23,6 @@ interface SavedVideo {
 
 export default function Page() {
   const [isRecording, setIsRecording] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -27,64 +30,90 @@ export default function Page() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [videoName, setVideoName] = useState('');
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [mlModelsReady, setMlModelsReady] = useState(false);
+  const [lastPoseKeypoints, setLastPoseKeypoints] = useState<any[]>([]);
   const [isClient, setIsClient] = useState(false);
-  const startTimeRef = useRef<Date | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isRecordingRef = useRef(false);
+  const detectionFrameRef = useRef<number | null>(null);
+  const lastDetectionTime = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(performance.now());
+  const startTimeRef = useRef<Date | null>(null);
+  const faceModelRef = useRef<blazeface.BlazeFaceModel | null>(null);
+  const poseModelRef = useRef<poseDetection.PoseDetector | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const isRecordingRef = useRef<boolean>(false);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  // -----------------------------
+  // 1) Initialize ML Models
+  // -----------------------------
+  const initMLModels = async () => {
+    try {
+      setMlModelsReady(false);
+      setError(null);
 
-  const initSpeechRecognition = () => {
-    // only run on client side
-    if (typeof window === 'undefined') return;
+      // Dynamically import TensorFlow.js and models
+      tf = await import('@tensorflow/tfjs');
+      blazeface = await import('@tensorflow-models/blazeface');
+      poseDetection = await import('@tensorflow-models/pose-detection');
 
-    if ('webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
+      // Set TF backend
+      await tf.setBackend('webgl');
+      await tf.ready();
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          }
-        }
-        if (finalTranscript) {
-          setTranscript((prev) => prev + ' ' + finalTranscript);
-        }
-      };
+      // Load face detection model
+      faceModelRef.current = await blazeface.load();
 
-      // no-speech errors
-      // recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      //   console.error('Speech recognition error:', error);
-      //   setError('Speech recognition error: ' + error);
-      // };
+      // Load pose detection model (MoveNet)
+      poseModelRef.current = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+      });
 
-      recognitionRef.current = recognition;
-    } else {
-      console.warn('Speech recognition not supported');
+      setMlModelsReady(true);
+      console.log('All ML models loaded successfully');
+    } catch (err) {
+      console.error('Error loading ML models:', err);
+      setError('Failed to load ML models: ' + (err as Error).message);
+      setMlModelsReady(false);
     }
   };
 
-  const startWebcam = async () => {
-    if (typeof window === 'undefined') return;
+  const updateCanvasSize = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    canvas.width = 640; // fixed width
+    canvas.height = 360; // fixed height (16:9)
+  };
 
+  // -----------------------------
+  // 2) Set up the webcam
+  // -----------------------------
+  const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640, max: 640 },
+          height: { ideal: 360, max: 360 },
+          frameRate: { ideal: 30 },
+          facingMode: 'user',
+        },
+        audio: true,
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         mediaStreamRef.current = stream;
+
+        await new Promise<void>((resolve) => {
+          videoRef.current!.onloadedmetadata = () => {
+            updateCanvasSize();
+            resolve();
+          };
+        });
       }
     } catch (error) {
       console.error('Error accessing webcam:', error);
@@ -106,114 +135,224 @@ export default function Page() {
     }
   };
 
-  const captureFrame = async (): Promise<string | null> => {
-    if (!videoRef.current || !canvasRef.current) return null;
+  // -----------------------------
+  // 3) Speech Recognition
+  // -----------------------------
+  const initSpeechRecognition = () => {
+    if (typeof window === 'undefined') return;
+    if ('webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+          setTranscript((prev) => prev + ' ' + finalTranscript);
+        }
+      };
+
+      recognitionRef.current = recognition;
+    } else {
+      console.warn('Speech recognition not supported in this browser.');
+    }
+  };
+
+  // -----------------------------
+  // 4) TensorFlow detection loop
+  // -----------------------------
+  const runDetection = async () => {
+    if (!isRecordingRef.current) return;
+
+    // Throttle detection to ~10 FPS (every 100ms)
+    const now = performance.now();
+    if (now - lastDetectionTime.current < 100) {
+      detectionFrameRef.current = requestAnimationFrame(runDetection);
+      return;
+    }
+    lastDetectionTime.current = now;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      console.error('Failed to get canvas context');
-      return null;
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL('image/jpeg', 0.8);
-  };
-
-  const getElapsedTime = () => {
-    if (!startTimeRef.current) return '00:00';
-    const elapsed = Math.floor((new Date().getTime() - startTimeRef.current.getTime()) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  };
-
-  const analyzeFrame = async () => {
-    const currentTranscript = transcript.trim();
-    console.log('Analyzing frame...');
-
-    const wasRecording = isRecordingRef.current;
-    if (!wasRecording) {
-      console.log('Not recording, skipping analysis');
+    if (!video || !canvas) {
+      detectionFrameRef.current = requestAnimationFrame(runDetection);
       return;
     }
 
-    try {
-      const frame = await captureFrame();
-      if (frame) {
-        console.log('Frame captured, sending to API...');
-        const result = await detectEvents(frame, currentTranscript);
-        console.log('API response:', result);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      detectionFrameRef.current = requestAnimationFrame(runDetection);
+      return;
+    }
 
-        if (!isRecordingRef.current) {
-          console.log('Recording stopped during analysis, discarding results');
-          return;
-        }
+    // Clear canvas and draw current video frame
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawVideoToCanvas(video, canvas, ctx);
 
-        if (result.events && result.events.length > 0) {
-          console.log('Events detected:', result.events);
+    // Scale for drawing predictions
+    const scaleX = canvas.width / video.videoWidth;
+    const scaleY = canvas.height / video.videoHeight;
 
-          result.events.forEach(async (event: VideoEvent) => {
-            const newTimestamp = {
-              timestamp: getElapsedTime(),
-              description: event.description,
-            };
-            console.log('Adding new timestamp:', newTimestamp);
+    // Face detection
+    if (faceModelRef.current) {
+      try {
+        const predictions = await faceModelRef.current.estimateFaces(video, false);
+        predictions.forEach((prediction) => {
+          const start = prediction.topLeft as [number, number];
+          const end = prediction.bottomRight as [number, number];
+          const size = [end[0] - start[0], end[1] - start[1]];
 
-            if (event.isDangerous) {
-              try {
-                console.log('Dangerous event detected, preparing to send email...');
-                const emailPayload = {
-                  title: 'Dangerous Activity Detected',
-                  description: `At ${newTimestamp.timestamp}, the following dangerous activity was detected: ${event.description}`,
-                };
-                console.log('Email payload:', emailPayload);
+          const scaledStart = [start[0] * scaleX, start[1] * scaleY];
+          const scaledSize = [size[0] * scaleX, size[1] * scaleY];
 
-                const response = await fetch('/api/send-email', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                  },
-                  body: JSON.stringify(emailPayload),
-                });
-                console.log('Fetch response status:', response.status);
+          // Draw bounding box
+          ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(scaledStart[0], scaledStart[1], scaledSize[0], scaledSize[1]);
 
-                const result = await response.json();
+          // Draw confidence
+          const confidence = Math.round((prediction.probability as number) * 100);
+          ctx.fillStyle = 'white';
+          ctx.font = '16px Arial';
+          ctx.fillText(`${confidence}%`, scaledStart[0], scaledStart[1] - 5);
+        });
+      } catch (err) {
+        console.error('Face detection error:', err);
+      }
+    }
 
-                if (!response.ok) {
-                  console.error('Failed to send email notification:', result.error);
-                  if (response.status === 401) {
-                    setError('Please sign in to receive email notifications for dangerous events.');
-                  } else if (response.status === 500) {
-                    setError('Email service not properly configured. Please contact support.');
-                  } else {
-                    setError(`Failed to send email notification: ${result.error?.message || 'Unknown error'}`);
-                  }
-                } else {
-                  console.log('Email notification sent successfully');
-                }
-              } catch (error) {
-                console.error('Error sending email notification:', error);
+    // Pose detection
+    if (poseModelRef.current) {
+      try {
+        const poses = await poseModelRef.current.estimatePoses(video);
+        if (poses.length > 0) {
+          const keypoints = poses[0].keypoints;
+          setLastPoseKeypoints(keypoints);
+
+          keypoints.forEach((keypoint) => {
+            if (keypoint.score > 0.3) {
+              const x = keypoint.x * scaleX;
+              const y = keypoint.y * scaleY;
+
+              // Draw keypoint
+              ctx.beginPath();
+              ctx.arc(x, y, 4, 0, 2 * Math.PI);
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+              ctx.fill();
+
+              // Outer circle
+              ctx.beginPath();
+              ctx.arc(x, y, 6, 0, 2 * Math.PI);
+              ctx.strokeStyle = 'white';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              // Label (if available)
+              if (keypoint.score > 0.5 && keypoint.name) {
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.fillText(`${keypoint.name}`, x + 8, y);
               }
             }
-
-            setTimestamps((prev) => {
-              const updated = [...prev, newTimestamp];
-              console.log('Updated timestamps:', updated);
-              return updated;
-            });
           });
-        } else {
-          console.log('No events detected in this frame');
         }
-      } else {
-        console.log('Failed to capture frame');
+      } catch (err) {
+        console.error('Pose detection error:', err);
+      }
+    }
+
+    lastFrameTimeRef.current = performance.now();
+
+    detectionFrameRef.current = requestAnimationFrame(runDetection);
+  };
+
+  const drawVideoToCanvas = (video: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
+    const videoAspect = video.videoWidth / video.videoHeight;
+    const canvasAspect = canvas.width / canvas.height;
+
+    let drawWidth = canvas.width;
+    let drawHeight = canvas.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (videoAspect > canvasAspect) {
+      drawHeight = canvas.width / videoAspect;
+      offsetY = (canvas.height - drawHeight) / 2;
+    } else {
+      drawWidth = canvas.height * videoAspect;
+      offsetX = (canvas.width - drawWidth) / 2;
+    }
+
+    ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+  };
+
+  const analyzeFrame = async () => {
+    if (!isRecordingRef.current) return;
+    const currentTranscript = transcript.trim();
+    const currentPoseKeypoints = [...lastPoseKeypoints];
+
+    try {
+      const frame = await captureFrame();
+      if (!frame) return;
+
+      if (!frame.startsWith('data:image/jpeg')) {
+        console.error('Invalid frame format');
+        return;
+      }
+
+      const result = await detectEvents(frame, currentTranscript);
+      if (!isRecordingRef.current) return;
+
+      if (result.events && result.events.length > 0) {
+        result.events.forEach(async (event: VideoEvent) => {
+          const newTimestamp = {
+            timestamp: getElapsedTime(),
+            description: event.description,
+            isDangerous: event.isDangerous,
+          };
+          setTimestamps((prev) => [...prev, newTimestamp]);
+
+          if (event.isDangerous) {
+            try {
+              const emailPayload = {
+                title: 'Dangerous Activity Detected',
+                description: `At ${newTimestamp.timestamp}, the following dangerous activity was detected: ${event.description}`,
+              };
+              const response = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json',
+                },
+                body: JSON.stringify(emailPayload),
+              });
+
+              if (!response.ok) {
+                if (response.status === 401) {
+                  setError('Please sign in to receive email notifications for dangerous events.');
+                } else if (response.status === 500) {
+                  setError('Email service not properly configured. Please contact support.');
+                } else {
+                  const errorText = await response.text();
+                  console.error('Failed to send email notification:', errorText);
+                  setError(`Failed to send email notification. Please try again later.`);
+                }
+                return;
+              }
+
+              const resData = await response.json();
+              console.log('Email notification sent successfully:', resData);
+            } catch (error) {
+              console.error('Error sending email notification:', error);
+            }
+          }
+        });
       }
     } catch (error) {
       console.error('Error analyzing frame:', error);
@@ -224,10 +363,60 @@ export default function Page() {
     }
   };
 
+  // -----------------------------
+  // 6) Capture current video frame (for analysis)
+  // -----------------------------
+  const captureFrame = async (): Promise<string | null> => {
+    if (!videoRef.current) return null;
+
+    const video = videoRef.current;
+    const tempCanvas = document.createElement('canvas');
+    const width = 640;
+    const height = 360;
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+
+    const context = tempCanvas.getContext('2d');
+    if (!context) return null;
+
+    try {
+      context.drawImage(video, 0, 0, width, height);
+      const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
+      return dataUrl;
+    } catch (error) {
+      console.error('Error capturing frame:', error);
+      return null;
+    }
+  };
+
+  // -----------------------------
+  // 7) Get elapsed time string
+  // -----------------------------
+  const getElapsedTime = () => {
+    if (!startTimeRef.current) return '00:00';
+    const elapsed = Math.floor((Date.now() - startTimeRef.current.getTime()) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  // -----------------------------
+  // 8) Recording control (start/stop)
+  // -----------------------------
   const startRecording = () => {
-    if (typeof window === 'undefined' || !mediaStreamRef.current) return;
+    if (!mlModelsReady) {
+      setError('ML models not ready. Please wait for initialization.');
+      return;
+    }
+    if (!mediaStreamRef.current) return;
+
+    setError(null);
+    setTimestamps([]);
+    setAnalysisProgress(0);
 
     startTimeRef.current = new Date();
+    isRecordingRef.current = true;
+    setIsRecording(true);
 
     if (recognitionRef.current) {
       setTranscript('');
@@ -253,31 +442,39 @@ export default function Page() {
       setVideoName('stream.mp4');
     };
 
-    mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start();
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
 
-    console.log('Starting recording...');
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      setRecordedVideoUrl(url);
+      setVideoName('stream.mp4');
+    };
+
+    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorder.start(1000);
+
+    if (detectionFrameRef.current) {
+      cancelAnimationFrame(detectionFrameRef.current);
+    }
+    lastDetectionTime.current = 0;
+    detectionFrameRef.current = requestAnimationFrame(runDetection);
 
     if (analysisIntervalRef.current) {
       clearInterval(analysisIntervalRef.current);
     }
-
-    setTimestamps([]);
-    setError(null);
-    setAnalysisProgress(0);
-    setRecordedVideoUrl(null);
-
-    isRecordingRef.current = true;
-    setIsRecording(true);
-
-    console.log('Setting up analysis interval...');
     analyzeFrame();
     analysisIntervalRef.current = setInterval(analyzeFrame, 3000);
-    console.log('Recording started');
   };
 
   const stopRecording = () => {
     startTimeRef.current = null;
+    isRecordingRef.current = false;
+    setIsRecording(false);
 
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -288,46 +485,21 @@ export default function Page() {
       mediaRecorderRef.current.stop();
     }
 
-    console.log('Stopping recording...');
-    isRecordingRef.current = false;
-    setIsRecording(false);
-
+    if (detectionFrameRef.current) {
+      cancelAnimationFrame(detectionFrameRef.current);
+      detectionFrameRef.current = null;
+    }
     if (analysisIntervalRef.current) {
       clearInterval(analysisIntervalRef.current);
       analysisIntervalRef.current = null;
     }
-    console.log('Recording stopped');
   };
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let mounted = true;
-
-    const init = async () => {
-      if (!mounted) return;
-
-      initSpeechRecognition();
-
-      await startWebcam();
-      if (mounted) {
-        canvasRef.current = document.createElement('canvas');
-      }
-    };
-
-    init();
-
-    return () => {
-      mounted = false;
-      stopWebcam();
-      if (analysisIntervalRef.current) {
-        clearInterval(analysisIntervalRef.current);
-      }
-    };
-  }, []);
-
+  // -----------------------------
+  // 9) Save video functionality
+  // -----------------------------
   const handleSaveVideo = () => {
-    if (typeof window === 'undefined' || !recordedVideoUrl || !videoName) return;
+    if (!recordedVideoUrl || !videoName) return;
 
     try {
       const savedVideos: SavedVideo[] = JSON.parse(localStorage.getItem('savedVideos') || '[]');
@@ -347,6 +519,28 @@ export default function Page() {
     }
   };
 
+  // -----------------------------
+  // 10) useEffect hooks
+  // -----------------------------
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    initSpeechRecognition();
+    const init = async () => {
+      await startWebcam();
+      await initMLModels();
+    };
+    init();
+
+    return () => {
+      stopWebcam();
+      if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
+      if (detectionFrameRef.current) cancelAnimationFrame(detectionFrameRef.current);
+    };
+  }, []);
+
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-black text-white flex items-center justify-center p-4">
       <div className="w-full max-w-4xl relative">
@@ -363,20 +557,28 @@ export default function Page() {
 
             <div className="space-y-4">
               <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900">
-                {isClient && (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover transform scale-x-[-1]"
+                <div className="relative w-full h-full" style={{ aspectRatio: '16/9' }}>
+                  {isClient && (
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      width={640}
+                      height={360}
+                      className="absolute inset-0 w-full h-full object-cover transform"
+                    />
+                  )}
+                  <canvas
+                    ref={canvasRef}
+                    width={640}
+                    height={360}
+                    className="absolute inset-0 w-full h-full object-cover transform"
                   />
-                )}
+                </div>
               </div>
 
-              {isClient && error && (
-                <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>
-              )}
+              {error && <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>}
 
               <div className="flex justify-center gap-4">
                 {!isRecording ? (
@@ -398,30 +600,7 @@ export default function Page() {
                 )}
               </div>
 
-              {isClient && !isRecording && recordedVideoUrl && (
-                <div className="mt-8 p-6 bg-zinc-900/50 rounded-lg border border-zinc-800">
-                  <h2 className="text-xl font-semibold mb-4 text-white">Save Recording</h2>
-                  <div className="flex gap-4">
-                    <Input
-                      type="text"
-                      placeholder="Enter video name"
-                      value={videoName}
-                      onChange={(e) => setVideoName(e.target.value)}
-                      className="bg-zinc-800 border-zinc-700 text-white"
-                    />
-                    <Button
-                      onClick={handleSaveVideo}
-                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                      disabled={!videoName}
-                    >
-                      <Save className="w-4 h-4" />
-                      Save
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {isClient && isRecording && (
+              {isRecording && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
@@ -461,6 +640,29 @@ export default function Page() {
                   )}
                 </div>
               </div>
+
+              {isClient && !isRecording && recordedVideoUrl && (
+                <div className="mt-8 p-6 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                  <h2 className="text-xl font-semibold mb-4 text-white">Save Recording</h2>
+                  <div className="flex gap-4">
+                    <Input
+                      type="text"
+                      placeholder="Enter video name"
+                      value={videoName}
+                      onChange={(e) => setVideoName(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                    <Button
+                      onClick={handleSaveVideo}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                      disabled={!videoName}
+                    >
+                      <Save className="w-4 h-4" />
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
