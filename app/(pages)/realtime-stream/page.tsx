@@ -6,6 +6,7 @@ import { Camera, StopCircle, PlayCircle, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TimestampList from '@/components/website/timestamp-list';
+import { Timeline } from '@/components/website/timeline';
 import type { Timestamp } from '@/app/types';
 import { detectEvents, type VideoEvent } from './actions';
 
@@ -45,6 +46,8 @@ export default function Page() {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [initializationProgress, setInitializationProgress] = useState<string>('');
   const [transcript, setTranscript] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -68,6 +71,7 @@ export default function Page() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const isRecordingRef = useRef<boolean>(false);
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // -----------------------------
   // 1) Initialize ML Models
@@ -435,6 +439,7 @@ export default function Page() {
   const getElapsedTime = () => {
     if (!startTimeRef.current) return '00:00';
     const elapsed = Math.floor((Date.now() - startTimeRef.current.getTime()) / 1000);
+    setCurrentTime(elapsed);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -444,6 +449,9 @@ export default function Page() {
   // 8) Recording control (start/stop)
   // -----------------------------
   const startRecording = () => {
+    setCurrentTime(0);
+    setVideoDuration(0);
+
     if (!mlModelsReady) {
       setError('ML models not ready. Please wait for initialization.');
       return;
@@ -457,6 +465,16 @@ export default function Page() {
     startTimeRef.current = new Date();
     isRecordingRef.current = true;
     setIsRecording(true);
+
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+    }
+    durationIntervalRef.current = setInterval(() => {
+      if (isRecordingRef.current) {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current!.getTime()) / 1000);
+        setVideoDuration(elapsed);
+      }
+    }, 1000);
 
     if (recognitionRef.current) {
       setTranscript('');
@@ -533,6 +551,10 @@ export default function Page() {
       clearInterval(analysisIntervalRef.current);
       analysisIntervalRef.current = null;
     }
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
   };
 
   // -----------------------------
@@ -564,6 +586,27 @@ export default function Page() {
   // -----------------------------
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setVideoDuration(video.duration || 60);
+    };
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    };
   }, []);
 
   useEffect(() => {
@@ -665,17 +708,31 @@ export default function Page() {
                 </div>
               )}
 
-              <div className="mt-4 space-y-2">
-                {timestamps.length > 0 ? (
-                  <TimestampList timestamps={timestamps} onTimestampClick={() => {}} />
-                ) : (
-                  <div className="space-y-2">
-                    <h2 className="text-xl font-semibold text-white">Key Moments</h2>
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <h2 className="text-xl font-semibold text-white">Key Moments Timeline</h2>
+                  {timestamps.length > 0 ? (
+                    <Timeline
+                      events={timestamps.map((ts) => {
+                        const [minutes, seconds] = ts.timestamp.split(':').map(Number);
+                        const timeInSeconds = minutes * 60 + seconds;
+                        return {
+                          startTime: timeInSeconds,
+                          endTime: timeInSeconds + 3,
+                          type: ts.isDangerous ? 'warning' : 'normal',
+                          label: ts.description,
+                        };
+                      })}
+                      totalDuration={videoDuration || 60}
+                      currentTime={currentTime}
+                    />
+                  ) : (
                     <p className="text-zinc-400 text-sm pb-3">
                       {isRecording ? 'Waiting for events...' : 'Start analysis to detect events'}
                     </p>
-                  </div>
-                )}
+                  )}
+                </div>
+                <TimestampList timestamps={timestamps} onTimestampClick={() => {}} />
               </div>
 
               <div className="mt-8 space-y-2">
