@@ -2,16 +2,20 @@
 
 import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Camera, StopCircle, PlayCircle, Save } from 'lucide-react';
+import { Camera, StopCircle, PlayCircle, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TimestampList from '@/components/website/timestamp-list';
 import type { Timestamp } from '@/app/types';
 import { detectEvents, type VideoEvent } from './actions';
 
-let tf: typeof import('@tensorflow/tfjs');
-let blazeface: typeof import('@tensorflow-models/blazeface');
-let poseDetection: typeof import('@tensorflow-models/pose-detection');
+import type * as blazeface from '@tensorflow-models/blazeface';
+import type * as posedetection from '@tensorflow-models/pose-detection';
+import type * as tf from '@tensorflow/tfjs';
+
+let tfjs: typeof tf;
+let blazefaceModel: typeof blazeface;
+let poseDetection: typeof posedetection;
 
 interface SavedVideo {
   id: string;
@@ -21,17 +25,33 @@ interface SavedVideo {
   timestamps: Timestamp[];
 }
 
+interface Keypoint {
+  x: number;
+  y: number;
+  score?: number;
+  name?: string;
+}
+
+interface FacePrediction {
+  topLeft: [number, number] | tf.Tensor1D;
+  bottomRight: [number, number] | tf.Tensor1D;
+  landmarks?: Array<[number, number]> | tf.Tensor2D;
+  probability: number | tf.Tensor1D;
+}
+
 export default function Page() {
   const [isRecording, setIsRecording] = useState(false);
   const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [initializationProgress, setInitializationProgress] = useState<string>('');
   const [transcript, setTranscript] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [videoName, setVideoName] = useState('');
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [mlModelsReady, setMlModelsReady] = useState(false);
-  const [lastPoseKeypoints, setLastPoseKeypoints] = useState<any[]>([]);
+  const [lastPoseKeypoints, setLastPoseKeypoints] = useState<Keypoint[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,7 +63,7 @@ export default function Page() {
   const lastFrameTimeRef = useRef<number>(performance.now());
   const startTimeRef = useRef<Date | null>(null);
   const faceModelRef = useRef<blazeface.BlazeFaceModel | null>(null);
-  const poseModelRef = useRef<poseDetection.PoseDetector | null>(null);
+  const poseModelRef = useRef<posedetection.PoseDetector | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -54,40 +74,63 @@ export default function Page() {
   // -----------------------------
   const initMLModels = async () => {
     try {
+      setIsInitializing(true);
       setMlModelsReady(false);
       setError(null);
 
-      // Dynamically import TensorFlow.js and models
-      tf = await import('@tensorflow/tfjs');
-      blazeface = await import('@tensorflow-models/blazeface');
-      poseDetection = await import('@tensorflow-models/pose-detection');
-
-      // Set TF backend
-      await tf.setBackend('webgl');
-      await tf.ready();
-
-      // Load face detection model
-      faceModelRef.current = await blazeface.load();
-
-      // Load pose detection model (MoveNet)
-      poseModelRef.current = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+      setInitializationProgress('Loading TensorFlow.js...');
+      const tfPromise = import('@tensorflow/tfjs').then(async (tf) => {
+        tfjs = tf;
+        await tf.ready();
+        await tf.setBackend('webgl');
+        await tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
+        await tf.env().set('WEBGL_PACK', true);
+        await tf.env().set('WEBGL_CHECK_NUMERICAL_PROBLEMS', false);
       });
 
+      setInitializationProgress('Loading face and pose detection models...');
+      const [blazefaceModule, poseDetectionModule] = await Promise.all([
+        import('@tensorflow-models/blazeface'),
+        import('@tensorflow-models/pose-detection'),
+      ]);
+
+      blazefaceModel = blazefaceModule;
+      poseDetection = poseDetectionModule;
+
+      await tfPromise;
+
+      setInitializationProgress('Initializing models...');
+      const [faceModel, poseModel] = await Promise.all([
+        blazefaceModel.load({
+          maxFaces: 1,
+          scoreThreshold: 0.5,
+        }),
+        poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+          enableSmoothing: true,
+          minPoseScore: 0.3,
+        }),
+      ]);
+
+      faceModelRef.current = faceModel;
+      poseModelRef.current = poseModel;
+
       setMlModelsReady(true);
+      setIsInitializing(false);
       console.log('All ML models loaded successfully');
     } catch (err) {
       console.error('Error loading ML models:', err);
       setError('Failed to load ML models: ' + (err as Error).message);
       setMlModelsReady(false);
+      setIsInitializing(false);
     }
   };
 
   const updateCanvasSize = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    canvas.width = 640; // fixed width
-    canvas.height = 360; // fixed height (16:9)
+    canvas.width = 640;
+    canvas.height = 360;
   };
 
   // -----------------------------
@@ -191,32 +234,27 @@ export default function Page() {
       return;
     }
 
-    // Clear canvas and draw current video frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawVideoToCanvas(video, canvas, ctx);
 
-    // Scale for drawing predictions
     const scaleX = canvas.width / video.videoWidth;
     const scaleY = canvas.height / video.videoHeight;
 
-    // Face detection
     if (faceModelRef.current) {
       try {
         const predictions = await faceModelRef.current.estimateFaces(video, false);
-        predictions.forEach((prediction) => {
+        predictions.forEach((prediction: blazeface.NormalizedFace) => {
           const start = prediction.topLeft as [number, number];
           const end = prediction.bottomRight as [number, number];
           const size = [end[0] - start[0], end[1] - start[1]];
 
           const scaledStart = [start[0] * scaleX, start[1] * scaleY];
-          const scaledSize = [size[0] * scaleX, size[1] * scaleY];
+          const scaledSize = [size[0] * scaleX, size[1] * scaleX];
 
-          // Draw bounding box
           ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
           ctx.lineWidth = 2;
           ctx.strokeRect(scaledStart[0], scaledStart[1], scaledSize[0], scaledSize[1]);
 
-          // Draw confidence
           const confidence = Math.round((prediction.probability as number) * 100);
           ctx.fillStyle = 'white';
           ctx.font = '16px Arial';
@@ -227,34 +265,36 @@ export default function Page() {
       }
     }
 
-    // Pose detection
     if (poseModelRef.current) {
       try {
         const poses = await poseModelRef.current.estimatePoses(video);
         if (poses.length > 0) {
           const keypoints = poses[0].keypoints;
-          setLastPoseKeypoints(keypoints);
+          const convertedKeypoints: Keypoint[] = keypoints.map((kp) => ({
+            x: kp.x,
+            y: kp.y,
+            score: kp.score ?? 0,
+            name: kp.name,
+          }));
+          setLastPoseKeypoints(convertedKeypoints);
 
           keypoints.forEach((keypoint) => {
-            if (keypoint.score > 0.3) {
+            if ((keypoint.score ?? 0) > 0.3) {
               const x = keypoint.x * scaleX;
               const y = keypoint.y * scaleY;
 
-              // Draw keypoint
               ctx.beginPath();
               ctx.arc(x, y, 4, 0, 2 * Math.PI);
               ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
               ctx.fill();
 
-              // Outer circle
               ctx.beginPath();
               ctx.arc(x, y, 6, 0, 2 * Math.PI);
               ctx.strokeStyle = 'white';
               ctx.lineWidth = 1.5;
               ctx.stroke();
 
-              // Label (if available)
-              if (keypoint.score > 0.5 && keypoint.name) {
+              if ((keypoint.score ?? 0) > 0.5 && keypoint.name) {
                 ctx.fillStyle = 'white';
                 ctx.font = '12px Arial';
                 ctx.fillText(`${keypoint.name}`, x + 8, y);
@@ -557,6 +597,12 @@ export default function Page() {
 
             <div className="space-y-4">
               <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900">
+                {isInitializing && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 z-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-500 mb-2" />
+                    <p className="text-zinc-300">{initializationProgress}</p>
+                  </div>
+                )}
                 <div className="relative w-full h-full" style={{ aspectRatio: '16/9' }}>
                   {isClient && (
                     <video
@@ -578,10 +624,20 @@ export default function Page() {
                 </div>
               </div>
 
-              {error && <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>}
+              {error && !isInitializing && (
+                <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">{error}</div>
+              )}
 
               <div className="flex justify-center gap-4">
-                {!isRecording ? (
+                {isInitializing ? (
+                  <button
+                    disabled
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-600 rounded-lg transition-colors cursor-not-allowed"
+                  >
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Initializing...
+                  </button>
+                ) : !isRecording ? (
                   <button
                     onClick={startRecording}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
