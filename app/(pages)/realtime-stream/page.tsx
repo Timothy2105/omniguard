@@ -485,7 +485,7 @@ export default function Page() {
 
     recordedChunksRef.current = [];
     const mediaRecorder = new MediaRecorder(mediaStreamRef.current, {
-      mimeType: 'video/webm',
+      mimeType: 'video/mp4',
     });
 
     mediaRecorder.ondataavailable = (event) => {
@@ -495,7 +495,7 @@ export default function Page() {
     };
 
     mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
       setRecordedVideoUrl(url);
       setVideoName('stream.mp4');
@@ -508,7 +508,7 @@ export default function Page() {
     };
 
     mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
       setRecordedVideoUrl(url);
       setVideoName('stream.mp4');
@@ -604,11 +604,13 @@ export default function Page() {
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
+    video.currentTime = 0;
+
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
-  }, []);
+  }, [recordedVideoUrl]);
 
   useEffect(() => {
     initSpeechRecognition();

@@ -11,7 +11,17 @@ interface VideoPlayerProps {
 const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(({ url, timestamps }, ref) => {
   return (
     <div className="aspect-video rounded-lg overflow-hidden bg-zinc-900">
-      <video ref={ref} src={url} className="w-full h-full" controls preload="metadata" />
+      <video
+        ref={ref}
+        src={url}
+        className="w-full h-full"
+        controls
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const video = e.target as HTMLVideoElement;
+          video.currentTime = 0;
+        }}
+      />
     </div>
   );
 });
