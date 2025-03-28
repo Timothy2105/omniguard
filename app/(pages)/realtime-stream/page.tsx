@@ -6,6 +6,7 @@ import { Camera, StopCircle, PlayCircle, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TimestampList from '@/components/website/timestamp-list';
+import ChatInterface from '@/components/website/chat-interface';
 import { Timeline } from '@/components/website/timeline';
 import type { Timestamp } from '@/app/types';
 import { detectEvents, type VideoEvent } from './actions';
@@ -779,6 +780,7 @@ export default function Page() {
             </div>
           </div>
         </div>
+        <ChatInterface timestamps={timestamps} />
       </div>
     </div>
   );
