@@ -10,7 +10,6 @@ import { HeaderNav } from '@/components/website/header-nav';
 import { GeminiFooter } from '@/components/website/gemini-footer';
 import './globals.css';
 import 'nprogress/nprogress.css';
-import { NavigationEvents } from '@/components/website/navigation-events';
 import NProgress from 'nprogress';
 
 NProgress.configure({
@@ -42,7 +41,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.className} suppressHydrationWarning>
       <body className="bg-background text-foreground" suppressHydrationWarning>
-        <NavigationEvents />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <main className="min-h-screen flex flex-col items-center">
             <div className="flex-1 w-full flex flex-col items-center">
