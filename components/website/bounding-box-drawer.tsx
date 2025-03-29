@@ -1,6 +1,11 @@
 import React, { useRef, useEffect } from 'react';
 
-const BoundingBoxDrawer = ({ imageUrl, boxes }) => {
+interface BoundingBoxDrawerProps {
+  imageUrl: string;
+  boxes: any[];
+}
+
+const BoundingBoxDrawer: React.FC<BoundingBoxDrawerProps> = ({ imageUrl, boxes }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
