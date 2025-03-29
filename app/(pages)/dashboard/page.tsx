@@ -72,7 +72,7 @@ export default function ProtectedPage() {
         </div>
       </div>
 
-      <div className="hidden lg:block w-96 border-l border-gray-200 dark:border-gray-800 overflow-auto p-6">
+      <div className="hidden lg:block w-96 border-l border-gray-200 dark:border-gray-800 p-6">
         <StatsOverview />
         <div className="mt-6">
           <EventFeed
