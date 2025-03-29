@@ -2,7 +2,7 @@
 
 ## Try It Out!
 
-omniguard.vercel.app
+(omniguard.vercel.app)[omniguard.vercel.app]
 
 ## Overview
 
