@@ -4,6 +4,8 @@
 
 [omniguard.vercel.app](https://omniguard.vercel.app/)
 
+- Note: If you get an internal server error, try accessing the website through this [link](https://omniguard.vercel.app/sign-in)
+
 ## Overview
 
 OmniGuard is an intelligent video surveillance platform that detects crime, suspicious activities and life threatening events such as fainting and choking and sends phone alerts to alert security of the issue. The model generates time-stamped incident reports with video evidence. It has 3 main features:
